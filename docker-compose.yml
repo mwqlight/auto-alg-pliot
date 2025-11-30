@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # MySQL数据库
+  mysql:
+    image: mysql:8.0
+    container_name: alg-cockpit-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: alg_cockpit
+      MYSQL_USER: alg_cockpit
+      MYSQL_PASSWORD: alg_cockpit123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: --default-authentication-plugin=mysql_native_password
+    restart: unless-stopped
+    networks:
+      - alg-cockpit-network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: alg-cockpit-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - alg-cockpit-network
+
+  # 后端服务
+  alg-cockpit-backend:
+    build:
+      context: ./alg-cockpit-backend
+      dockerfile: Dockerfile
+    container_name: alg-cockpit-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/alg_cockpit?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+    depends_on:
+      - mysql
+      - redis
+    restart: unless-stopped
+    networks:
+      - alg-cockpit-network
+
+  # 前端服务
+  alg-cockpit-frontend:
+    build:
+      context: ./alg-cockpit-frontend
+      dockerfile: Dockerfile
+    container_name: alg-cockpit-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - alg-cockpit-backend
+    restart: unless-stopped
+    networks:
+      - alg-cockpit-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  alg-cockpit-network:
+    driver: bridge
